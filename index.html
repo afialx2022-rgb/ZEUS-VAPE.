@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZEUS VAPE</title>
+<style>
+body { font-family: Arial; margin:0; padding:0; background:#f8f8f8; }
+header { background:#4CAF50; color:white; padding:15px; text-align:center; }
+.controls, .add-form, .summary { display:flex; flex-wrap:wrap; justify-content:center; margin:15px; }
+.controls input, .controls select, .add-form input, .add-form select, .add-form button { margin:5px; padding:10px; font-size:16px; }
+.container { display:flex; flex-wrap:wrap; justify-content:center; margin:20px; }
+.product-card { background:white; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.1); margin:10px; padding:15px; width:250px; text-align:center; }
+.product-card img { width:100%; border-radius:10px; }
+.product-card h3 { margin:10px 0 5px 0; }
+.product-card p { margin:5px 0; color:#555; }
+.buy-btn { display:inline-block; margin-top:10px; padding:10px 15px; background:#25D366; color:white; text-decoration:none; border-radius:5px; }
+.stock { font-size:14px; color:red; margin-bottom:5px; }
+.qty-control { display:flex; justify-content:center; align-items:center; margin-top:5px; }
+.qty-control button { padding:5px 10px; font-size:16px; margin:0 5px; }
+.qty-control input { width:40px; text-align:center; font-size:16px; }
+</style>
+</head>
+<body>
+
+<header><h1>ZEUS VAPE</h1></header>
+
+<div class="controls">
+<input type="text" id="search" placeholder="Cari produk...">
+<select id="category">
+<option value="all">Semua Kategori</option>
+<option value="makanan">VAPE</option>
+<option value="minuman">VAPE</option>
+<option value="lainnya">Lainnya</option>
+</select>
+</div>
+
+<div class="add-form">
+<input type="text" id="productName" placeholder="Nama Produk">
+<input type="text" id="productPrice" placeholder="Harga (Rp)">
+<input type="number" id="productStock" placeholder="Stok">
+<input type="file" id="productImageFile" accept="image/*">
+<img id="previewImage" src="" style="width:80px; display:none; border-radius:5px;">
+<input type="text" id="productWhatsapp" placeholder="Nomor WhatsApp">
+<select id="productCategory">
+<option value="makanan">VAPE</option>
+<option value="minuman">VAPE</option>
+<option value="lainnya">Lainnya</option>
+</select>
+<button onclick="addProduct()">Tambah / Update Produk</button>
+</div>
+
+<div class="container" id="product-list"></div>
+
+<div class="summary" id="summary">
+<h3>Ringkasan Penjualan</h3>
+<div id="salesSummary"></div>
+</div>
+
+<script>
+let products = JSON.parse(localStorage.getItem('products')) || [];
+
+const productList = document.getElementById('product-list');
+const searchInput = document.getElementById('search');
+const categorySelect = document.getElementById('category');
+const salesSummary = document.getElementById('salesSummary');
+const productImageFile = document.getElementById('productImageFile');
+const previewImage = document.getElementById('previewImage');
+
+productImageFile.addEventListener('change', function(e){
+    const file = e.target.files[0];
+    if(file){
+        const reader = new FileReader();
+        reader.onload = function(event){
+            previewImage.src = event.target.result;
+            previewImage.style.display = 'inline-block';
+        }
+        reader.readAsDataURL(file);
+    }
+});
+
+function saveProducts(){ localStorage.setItem('products', JSON.stringify(products)); }
+
+function displayProducts(filterText="", filterCategory="all"){
+    productList.innerHTML="";
+    const filtered = products.filter(p =>
+        p.name.toLowerCase().includes(filterText.toLowerCase()) &&
+        (filterCategory==="all" || p.category===filterCategory)
+    );
+    filtered.forEach((product,index)=>{
+        const card = document.createElement('div');
+        card.className='product-card';
+        card.innerHTML=`
+            <img src="${product.image}" alt="${product.name}">
+            <h3>${product.name}</h3>
+            <p>Harga: Rp${product.price.toLocaleString()}</p>
+            <p class="stock">${product.stock>0 ? "Stok: "+product.stock : "Habis"}</p>
+            <div class="qty-control">
+                <button onclick="changeQty(${index}, -1)">-</button>
+                <input type="number" id="qty-${index}" value="1" min="1" max="${product.stock}">
+                <button onclick="changeQty(${index}, 1)">+</button>
+            </div>
+            <a class="buy-btn" href="#" onclick="buyViaWhatsapp(${index})">Beli via WhatsApp</a>
+            <br><button onclick="editProduct(${index})">Edit</button>
+        `;
+        productList.appendChild(card);
+    });
+    updateSummary();
+}
+
+function changeQty(index, delta){
+    const input = document.getElementById(`qty-${index}`);
+    let value = parseInt(input.value);
+    const max = products[index].stock;
+    value += delta;
+    if(value < 1) value=1;
+    if(value > max) value=max;
+    input.value = value;
+}
+
+function buyViaWhatsapp(index){
+    const product = products[index];
+    const qtyInput = document.getElementById(`qty-${index}`);
+    let qty = parseInt(qtyInput.value);
+    if(qty > product.stock) qty = product.stock;
+    if(qty<1) return alert("Jumlah minimal 1");
+
+    const text = `Halo, saya ingin memesan ${product.name} sebanyak ${qty} pcs`;
+    window.open(`https://wa.me/${product.whatsapp.replace(/\D/g,'')}?text=${encodeURIComponent(text)}`, "_blank");
+
+    product.stock -= qty;
+    product.sold += qty;
+    saveProducts();
+    displayProducts(searchInput.value, categorySelect.value);
+}
+
+function addProduct(){
+    const name=document.getElementById('productName').value.trim();
+    const price=parseInt(document.getElementById('productPrice').value);
+    const stock=parseInt(document.getElementById('productStock').value);
+    const whatsapp=document.getElementById('productWhatsapp').value.trim();
+    const category=document.getElementById('productCategory').value;
+    const image=previewImage.src || "https://via.placeholder.com/250";
+
+    if(!name || isNaN(price) || isNaN(stock)){
+        alert("Mohon isi semua data produk dengan benar");
+        return;
+    }
+
+    const existing = products.find(p=>p.name.toLowerCase()===name.toLowerCase());
+    if(existing){
+        existing.price=price; existing.stock=stock; existing.image=image;
+        existing.whatsapp=whatsapp; existing.category=category;
+        alert("Produk diperbarui");
+    }else{
+        products.push({name,price,stock,image,whatsapp,category,sold:0});
+        alert("Produk ditambahkan");
+    }
+
+    saveProducts();
+    displayProducts(searchInput.value, categorySelect.value);
+    clearForm();
+}
+
+function clearForm(){
+    document.getElementById('productName').value="";
+    document.getElementById('productPrice').value="";
+    document.getElementById('productStock').value="";
+    document.getElementById('productWhatsapp').value="";
+    document.getElementById('productCategory').value="makanan";
+    previewImage.src=""; previewImage.style.display="none";
+    productImageFile.value="";
+}
+
+function editProduct(index){
+    const p=products[index];
+    document.getElementById('productName').value=p.name;
+    document.getElementById('productPrice').value=p.price;
+    document.getElementById('productStock').value=p.stock;
+    document.getElementById('productWhatsapp').value=p.whatsapp;
+    document.getElementById('productCategory').value=p.category;
+    previewImage.src=p.image; previewImage.style.display="inline-block";
+}
+
+function updateSummary(){
+    salesSummary.innerHTML="";
+    products.forEach(p=>{
+        salesSummary.innerHTML+=`<p>${p.name}: Terjual ${p.sold}, Sisa Stok ${p.stock}</p>`;
+    });
+}
+
+searchInput.addEventListener('input', ()=>displayProducts(searchInput.value, categorySelect.value));
+categorySelect.addEventListener('change', ()=>displayProducts(searchInput.value, categorySelect.value));
+
+displayProducts();
+</script>
+</body>
+</html>
